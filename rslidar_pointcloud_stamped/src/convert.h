@@ -21,6 +21,8 @@
 #include <dynamic_reconfigure/server.h>
 #include <rslidar_pointcloud/CloudNodeConfig.h>
 #include "rawdata.h"
+#include <sensor_msgs/point_cloud2_iterator.h>
+
 
 namespace rslidar_pointcloud
 {

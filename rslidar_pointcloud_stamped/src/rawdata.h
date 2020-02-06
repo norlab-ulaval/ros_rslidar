@@ -32,6 +32,9 @@
 #include <pcl_ros/impl/transforms.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 #include <stdio.h>
+
+
+
 namespace rslidar_rawdata
 {
 // static const float  ROTATION_SOLUTION_ = 0.18f;  //水平角分辨率 10hz
@@ -135,8 +138,29 @@ public:
   /*unpack the RS16 UDP packet and opuput PCL PointXYZI type*/
   void unpack(const rslidar_msgs::rslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud);
 
-  /*unpack the RS32 UDP packet and opuput PCL PointXYZI type*/
+  /*unpack the RS16 UDP packet and output several std::vectors with the values*/
+  void unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
+                      std::vector<float>&  x_vect,
+                      std::vector<float>&  y_vect,
+                      std::vector<float>&  z_vect,
+                      std::vector<float>&  intensity_vect,
+                      std::vector<uint32_t>&  time_offset_vect,
+                      ros::Time& first_stamp
+                      );
+
+  /*unpack the RS32 UDP packet and output PCL PointXYZI type*/
   void unpack_RS32(const rslidar_msgs::rslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud);
+
+  /*unpack the RS32 UDP packet and output several std::vectors with the values*/
+  void unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
+                           std::vector<float>&  x_vect,
+                           std::vector<float>&  y_vect,
+                           std::vector<float>&  z_vect,
+                           std::vector<float>&  intensity_vect,
+                           std::vector<uint32_t>&  time_offset_vect,
+                           ros::Time& first_stamp
+                           );
+
 
   /*compute temperature*/
   float computeTemperature(unsigned char bit1, unsigned char bit2);

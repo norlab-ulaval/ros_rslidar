@@ -864,6 +864,7 @@ void RawData::unpack(const rslidar_msgs::rslidarPacket& pkt, pcl::PointCloud<pcl
   }
 }
 
+
 void RawData::unpack_RS32(const rslidar_msgs::rslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud)
 {
   float azimuth;  // 0.01 dgree
@@ -1064,6 +1065,364 @@ void RawData::unpack_RS32(const rslidar_msgs::rslidarPacket& pkt, pcl::PointClou
       }
     }
   }
+}
+
+
+//------------------------------------------------------------
+
+/** @brief convert raw packet to point cloud
+ *
+ *  @param pkt raw packet to unpack
+ *  @param pc shared pointer to point cloud (points are appended)
+ */
+void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
+                             std::vector<float>&  x_vect,
+                             std::vector<float>&  y_vect,
+                             std::vector<float>&  z_vect,
+                             std::vector<float>&  intensity_vect,
+                             std::vector<uint32_t>&  time_offset_vect,
+                             ros::Time& first_stamp)
+{
+    //check pkt header
+    if (pkt.data[0] != 0x55 || pkt.data[1] != 0xAA || pkt.data[2] != 0x05 || pkt.data[3] != 0x0A)
+    {
+        return;
+    }
+
+    if (numOfLasers == 32)
+    {
+        unpack_RS32_stamped(pkt, x_vect, y_vect, z_vect, intensity_vect, time_offset_vect, first_stamp);
+        return;
+    }
+    float azimuth;  // 0.01 dgree
+    float intensity;
+    float azimuth_diff;
+    float azimuth_corrected_f;
+    int azimuth_corrected;
+
+    const raw_packet_t* raw = (const raw_packet_t*)&pkt.data[42];
+
+    for (int block = 0; block < BLOCKS_PER_PACKET; block++, this->block_num++)  // 1 packet:12 data blocks
+    {
+        if (UPPER_BANK != raw->blocks[block].header)
+        {
+            ROS_INFO_STREAM_THROTTLE(180, "skipping RSLIDAR DIFOP packet");
+            break;
+        }
+
+        if (tempPacketNum < 20000 && tempPacketNum > 0)  // update temperature information per 20000 packets
+        {
+            tempPacketNum++;
+        }
+        else
+        {
+            temper = computeTemperature(pkt.data[38], pkt.data[39]);
+            // ROS_INFO_STREAM("Temp is: " << temper);
+            tempPacketNum = 1;
+        }
+
+        azimuth = (float)(256 * raw->blocks[block].rotation_1 + raw->blocks[block].rotation_2);
+
+        if (block < (BLOCKS_PER_PACKET - 1))  // 12
+        {
+            int azi1, azi2;
+            azi1 = 256 * raw->blocks[block + 1].rotation_1 + raw->blocks[block + 1].rotation_2;
+            azi2 = 256 * raw->blocks[block].rotation_1 + raw->blocks[block].rotation_2;
+            azimuth_diff = (float)((36000 + azi1 - azi2) % 36000);
+        }
+        else
+        {
+            int azi1, azi2;
+            azi1 = 256 * raw->blocks[block].rotation_1 + raw->blocks[block].rotation_2;
+            azi2 = 256 * raw->blocks[block - 1].rotation_1 + raw->blocks[block - 1].rotation_2;
+            azimuth_diff = (float)((36000 + azi1 - azi2) % 36000);
+        }
+
+        for (int firing = 0, k = 0; firing < RS16_FIRINGS_PER_BLOCK; firing++)  // 2
+        {
+            for (int dsr = 0; dsr < RS16_SCANS_PER_FIRING; dsr++, k += RAW_SCAN_SIZE)  // 16   3
+            {
+                if (0 == return_mode_)
+                {
+                    azimuth_corrected_f = azimuth + (azimuth_diff * (dsr * RS16_DSR_TOFFSET)) / RS16_FIRING_TOFFSET;
+                }
+                else
+                {
+                    azimuth_corrected_f = azimuth + (azimuth_diff * ((dsr * RS16_DSR_TOFFSET) + (firing * RS16_FIRING_TOFFSET)) /
+                                                     RS16_BLOCK_TDURATION);
+                }
+                azimuth_corrected = ((int)round(azimuth_corrected_f)) % 36000;  // convert to integral value...
+
+                union two_bytes tmp;
+                tmp.bytes[1] = raw->blocks[block].data[k];
+                tmp.bytes[0] = raw->blocks[block].data[k + 1];
+                int distance = tmp.uint;
+
+                // read intensity
+                intensity = raw->blocks[block].data[k + 2];
+                if (Curvesis_new)
+                    intensity = calibrateIntensity(intensity, dsr, distance);
+                else
+                    intensity = calibrateIntensity_old(intensity, dsr, distance);
+
+                float distance2 = pixelToDistance(distance, dsr);
+                if (dis_resolution_mode_ == 0)  // distance resolution is 0.5cm
+                {
+                    distance2 = distance2 * DISTANCE_RESOLUTION_NEW;
+                }
+                else
+                {
+                    distance2 = distance2 * DISTANCE_RESOLUTION;
+                }
+
+                float arg_horiz = (float)azimuth_corrected / 18000.0f * M_PI;
+                float arg_horiz_orginal = arg_horiz;
+                float arg_vert = VERT_ANGLE[dsr];
+                //pcl::PointXYZI point;
+                int output_vector_index = (2 * this->block_num + firing)*RS16_SCANS_PER_FIRING + dsr;
+                uint32_t beam_time_offset = 0; //TODO VK: Compute the offset
+
+                if (distance2 > max_distance_ || distance2 < min_distance_ ||
+                    (angle_flag_ && (arg_horiz < start_angle_ || arg_horiz > end_angle_)) ||
+                    (!angle_flag_ && (arg_horiz > end_angle_ && arg_horiz < start_angle_)))  // invalid distance
+                {
+                    x_vect[output_vector_index] = NAN;
+                    y_vect[output_vector_index] = NAN;
+                    z_vect[output_vector_index] = NAN;
+                    intensity_vect[output_vector_index] = 0;
+                    time_offset_vect[output_vector_index] = beam_time_offset;
+                }
+                else
+                {
+                    // If you want to fix the rslidar Y aixs to the front side of the cable, please use the two line below
+                    // point.x = dis * cos(arg_vert) * sin(arg_horiz);
+                    // point.y = dis * cos(arg_vert) * cos(arg_horiz);
+
+                    // If you want to fix the rslidar X aixs to the front side of the cable, please use the two line below
+
+                    x_vect[output_vector_index] = distance2 * cos(arg_vert) * cos(arg_horiz) + R1_ * cos(arg_horiz_orginal);
+                    y_vect[output_vector_index] = -distance2 * cos(arg_vert) * sin(arg_horiz) - R1_ * sin(arg_horiz_orginal);
+                    z_vect[output_vector_index] = distance2 * sin(arg_vert) - R2_;
+                    intensity_vect[output_vector_index] = intensity;
+                    time_offset_vect[output_vector_index] = beam_time_offset;
+                }
+            }
+        }
+    }
+}
+
+
+void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
+                                  std::vector<float>&  x_vect,
+                                  std::vector<float>&  y_vect,
+                                  std::vector<float>&  z_vect,
+                                  std::vector<float>&  intensity_vect,
+                                  std::vector<uint32_t>&  time_offset_vect,
+                                  ros::Time& first_stamp
+                                  )
+{
+    float azimuth;  // 0.01 dgree
+    float intensity;
+    float azimuth_diff;
+    float azimuth_corrected_f;
+    int azimuth_corrected;
+
+    const raw_packet_t* raw = (const raw_packet_t*)&pkt.data[42];
+
+
+    for (int block = 0; block < BLOCKS_PER_PACKET; block++, this->block_num++)  // 1 packet:12 data blocks
+    {
+        if (UPPER_BANK != raw->blocks[block].header)
+        {
+            ROS_INFO_STREAM_THROTTLE(180, "skipping RSLIDAR DIFOP packet");
+            break;
+        }
+
+        if (tempPacketNum < 20000 && tempPacketNum > 0)  // update temperature information per 20000 packets
+        {
+            tempPacketNum++;
+        }
+        else
+        {
+            temper = computeTemperature(pkt.data[38], pkt.data[39]);
+            // ROS_INFO_STREAM("Temp is: " << temper);
+            tempPacketNum = 1;
+        }
+
+        azimuth = (float)(256 * raw->blocks[block].rotation_1 + raw->blocks[block].rotation_2);
+
+        int azi1, azi2;
+        if (0 == return_mode_)
+        {//dual return mode
+            if (block < (BLOCKS_PER_PACKET - 2))  // 12
+            {
+                azi1 = 256 * raw->blocks[block+2].rotation_1 + raw->blocks[block+2].rotation_2;
+                azi2 = 256 * raw->blocks[block].rotation_1 + raw->blocks[block].rotation_2;
+            }
+            else
+            {
+                azi1 = 256 * raw->blocks[block].rotation_1 + raw->blocks[block].rotation_2;
+                azi2 = 256 * raw->blocks[block - 2].rotation_1 + raw->blocks[block - 2].rotation_2;
+            }
+        }
+        else
+        {
+            if (block < (BLOCKS_PER_PACKET - 1))  // 12
+            {
+                azi1 = 256 * raw->blocks[block + 1].rotation_1 + raw->blocks[block + 1].rotation_2;
+                azi2 = 256 * raw->blocks[block].rotation_1 + raw->blocks[block].rotation_2;
+            }
+            else
+            {
+                azi1 = 256 * raw->blocks[block].rotation_1 + raw->blocks[block].rotation_2;
+                azi2 = 256 * raw->blocks[block - 1].rotation_1 + raw->blocks[block - 1].rotation_2;
+            }
+        }
+        azimuth_diff = (float)((36000 + azi1 - azi2) % 36000);
+
+        if (dis_resolution_mode_ == 0)  // distance resolution is 0.5cm and delete the AB packet mechanism
+        {
+            for (int dsr = 0, k = 0; dsr < RS32_SCANS_PER_FIRING * RS32_FIRINGS_PER_BLOCK; dsr++, k += RAW_SCAN_SIZE)  // 16 3
+            {
+                int dsr_temp;
+                if (dsr >= 16)
+                {
+                    dsr_temp = dsr - 16;
+                }
+                else
+                {
+                    dsr_temp = dsr;
+                }
+                azimuth_corrected_f = azimuth + (azimuth_diff * ((dsr_temp * RS32_DSR_TOFFSET)) / RS32_BLOCK_TDURATION);
+                azimuth_corrected = correctAzimuth(azimuth_corrected_f, dsr);
+
+                union two_bytes tmp;
+                tmp.bytes[1] = raw->blocks[block].data[k];
+                tmp.bytes[0] = raw->blocks[block].data[k + 1];
+                int distance = tmp.uint;
+
+                // read intensity
+                intensity = (float)raw->blocks[block].data[k + 2];
+                intensity = calibrateIntensity(intensity, dsr, distance);
+
+                float distance2 = pixelToDistance(distance, dsr);
+                distance2 = distance2 * DISTANCE_RESOLUTION_NEW;
+
+                float arg_horiz_orginal = (float)azimuth_corrected_f / 18000.0f * M_PI;
+                float arg_horiz = (float)azimuth_corrected / 18000.0f * M_PI;
+                float arg_vert = VERT_ANGLE[dsr];
+                //pcl::PointXYZI point;
+                int output_vector_index = (this->block_num)*RS32_FIRINGS_PER_BLOCK + dsr;
+                uint32_t beam_time_offset = 0; //TODO VK: Compute the offset for RS32
+
+                if (distance2 > max_distance_ || distance2 < min_distance_ ||
+                    (angle_flag_ && (arg_horiz < start_angle_ || arg_horiz > end_angle_)) ||
+                    (!angle_flag_ && (arg_horiz > end_angle_ && arg_horiz < start_angle_)))  // invalid distance
+                {
+                    x_vect[output_vector_index] = NAN;
+                    y_vect[output_vector_index] = NAN;
+                    z_vect[output_vector_index] = NAN;
+                    intensity_vect[output_vector_index] = 0;
+                    time_offset_vect[output_vector_index] = beam_time_offset;
+                }
+                else
+                {
+                    // If you want to fix the rslidar Y aixs to the front side of the cable, please use the two line below
+                    // point.x = dis * cos(arg_vert) * sin(arg_horiz);
+                    // point.y = dis * cos(arg_vert) * cos(arg_horiz);
+
+                    // If you want to fix the rslidar X aixs to the front side of the cable, please use the two line below
+                    x_vect[output_vector_index]  =  distance2 * cos(arg_vert) * cos(arg_horiz) + R1_ * cos(arg_horiz_orginal);
+                    y_vect[output_vector_index]  = -distance2 * cos(arg_vert) * sin(arg_horiz) - R1_ * sin(arg_horiz_orginal);
+                    z_vect[output_vector_index]  = distance2 * sin(arg_vert) - R2_;
+                    intensity_vect[output_vector_index] = intensity;
+                    time_offset_vect[output_vector_index] = beam_time_offset;
+                }
+            }
+        }
+        else
+        {
+            // Estimate the type of packet
+            union two_bytes tmp_flag;
+            tmp_flag.bytes[1] = raw->blocks[block].data[0];
+            tmp_flag.bytes[0] = raw->blocks[block].data[1];
+            int ABflag = isABPacket(tmp_flag.uint);
+
+            int k = 0;
+            int index;
+            for (int dsr = 0; dsr < RS32_SCANS_PER_FIRING * RS32_FIRINGS_PER_BLOCK; dsr++, k += RAW_SCAN_SIZE)  // 16   3
+            {
+                if (ABflag == 1 && dsr < 16)
+                {
+                    index = k + 48;
+                }
+                else if (ABflag == 1 && dsr >= 16)
+                {
+                    index = k - 48;
+                }
+                else
+                {
+                    index = k;
+                }
+
+                int dsr_temp;
+                if (dsr >= 16)
+                {
+                    dsr_temp = dsr - 16;
+                }
+                else
+                {
+                    dsr_temp = dsr;
+                }
+                azimuth_corrected_f = azimuth + (azimuth_diff * ((dsr_temp * RS32_DSR_TOFFSET)) / RS32_BLOCK_TDURATION);
+                azimuth_corrected = correctAzimuth(azimuth_corrected_f, dsr);
+
+                union two_bytes tmp;
+                tmp.bytes[1] = raw->blocks[block].data[index];
+                tmp.bytes[0] = raw->blocks[block].data[index + 1];
+                int ab_flag_in_block = isABPacket(tmp.uint);
+                int distance = tmp.uint - ab_flag_in_block * 32768;
+
+                // read intensity
+                intensity = (float)raw->blocks[block].data[index + 2];
+                intensity = calibrateIntensity(intensity, dsr, distance);
+
+                float distance2 = pixelToDistance(distance, dsr);
+                distance2 = distance2 * DISTANCE_RESOLUTION;
+
+                float arg_horiz_orginal = (float)azimuth_corrected_f / 18000.0f * M_PI;
+                float arg_horiz = (float)azimuth_corrected / 18000.0f * M_PI;
+                float arg_vert = VERT_ANGLE[dsr];
+                //pcl::PointXYZI point;
+                int output_vector_index = (this->block_num)*RS32_FIRINGS_PER_BLOCK + dsr;
+                uint32_t beam_time_offset = 0; //TODO VK: Compute the offset for RS32
+
+                if (distance2 > max_distance_ || distance2 < min_distance_ ||
+                    (angle_flag_ && (arg_horiz < start_angle_ || arg_horiz > end_angle_)) ||
+                    (!angle_flag_ && (arg_horiz > end_angle_ && arg_horiz < start_angle_)))  // invalid distance
+                {
+                    x_vect[output_vector_index] = NAN;
+                    y_vect[output_vector_index] = NAN;
+                    z_vect[output_vector_index] = NAN;
+                    intensity_vect[output_vector_index] = 0;
+                    time_offset_vect[output_vector_index] = beam_time_offset;
+                }
+                else
+                {
+                    // If you want to fix the rslidar Y aixs to the front side of the cable, please use the two line below
+                    // point.x = dis * cos(arg_vert) * sin(arg_horiz);
+                    // point.y = dis * cos(arg_vert) * cos(arg_horiz);
+
+                    // If you want to fix the rslidar X aixs to the front side of the cable, please use the two line below
+                    x_vect[output_vector_index] = distance2 * cos(arg_vert) * cos(arg_horiz) + R1_ * cos(arg_horiz_orginal);
+                    y_vect[output_vector_index] = -distance2 * cos(arg_vert) * sin(arg_horiz) - R1_ * sin(arg_horiz_orginal);
+                    z_vect[output_vector_index] = distance2 * sin(arg_vert) - R2_;
+                    intensity_vect[output_vector_index] = intensity;
+                    time_offset_vect[output_vector_index] = beam_time_offset;
+                }
+            }
+        }
+    }
 }
 
 }  // namespace rs_pointcloud
