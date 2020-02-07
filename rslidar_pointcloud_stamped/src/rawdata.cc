@@ -1312,8 +1312,12 @@ void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
                 float arg_horiz = (float)azimuth_corrected / 18000.0f * M_PI;
                 float arg_vert = VERT_ANGLE[dsr];
                 //pcl::PointXYZI point;
-                int output_vector_index = (this->block_num)*RS32_FIRINGS_PER_BLOCK + dsr;
-                uint32_t beam_time_offset = 0; //TODO VK: Compute the offset for RS32
+                int output_vector_index = (this->block_num)*RS32_SCANS_PER_FIRING + dsr;
+                uint32_t beam_time_offset = 50000*(this->block_num) + 3000*(dsr%16);   // nanoseconds
+                //VK: This is Time_offset = 50us * (sequence_index -1) + 3us * (mod(data_index,16)-1) from the datasheet
+
+                //std::cout << "Block num: " << this->block_num << ", dsr: " << dsr << ", total: " <<  output_vector_index <<
+                //", time offset" << beam_time_offset << " ns." << std::endl;
 
                 if (distance2 > max_distance_ || distance2 < min_distance_ ||
                     (angle_flag_ && (arg_horiz < start_angle_ || arg_horiz > end_angle_)) ||
@@ -1394,8 +1398,9 @@ void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
                 float arg_horiz = (float)azimuth_corrected / 18000.0f * M_PI;
                 float arg_vert = VERT_ANGLE[dsr];
                 //pcl::PointXYZI point;
-                int output_vector_index = (this->block_num)*RS32_FIRINGS_PER_BLOCK + dsr;
-                uint32_t beam_time_offset = 0; //TODO VK: Compute the offset for RS32
+                int output_vector_index = (this->block_num)*RS32_SCANS_PER_FIRING + dsr;
+              uint32_t beam_time_offset = 50000*(this->block_num) + 3000*(dsr%16);   // nanoseconds
+              //VK: This is Time_offset = 50us * (sequence_index -1) + 3us * (mod(data_index,16)-1) from the datasheet
 
                 if (distance2 > max_distance_ || distance2 < min_distance_ ||
                     (angle_flag_ && (arg_horiz < start_angle_ || arg_horiz > end_angle_)) ||

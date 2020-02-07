@@ -92,6 +92,9 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
   outMsg.width = width;
   outMsg.is_dense = is_dense;
 
+
+  std::cout << "-------------------------------------" << std::endl;
+
   data_->block_num = 0;
   for (size_t i = 0; i < scanMsg->packets.size(); ++i)
   {
@@ -125,6 +128,7 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
       *iter_z = z_vect[index_in_vectors];
       *iter_i = intensity_vect[index_in_vectors];
       *iter_t = time_offset_vect[index_in_vectors];
+
   }
 
   output_.publish(outMsg);

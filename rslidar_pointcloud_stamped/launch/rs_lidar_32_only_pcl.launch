@@ -1,0 +1,23 @@
+<launch>
+  <arg name="model" default="RS32" />
+  <arg name="device_ip" default="192.168.1.200" />
+  <arg name="msop_port" default="6699" />
+  <arg name="difop_port" default="7788" />
+  <arg name="lidar_param_path" default="$(find rslidar_pointcloud_stamped)/data/configuration_files_161192401427"/>
+
+  <node  name="cloud_node_stamped" pkg="rslidar_pointcloud_stamped" type="cloud_node_stamped" output="screen" >
+    <param name="model" value="$(arg model)"/>
+    <param name="curves_path" value="$(arg lidar_param_path)/curves.csv" />
+    <param name="angle_path" value="$(arg lidar_param_path)/angle.csv" />
+    <param name="channel_path" value="$(arg lidar_param_path)/ChannelNum.csv" />
+    <param name="curves_rate_path" value="$(arg lidar_param_path)/CurveRate.csv" />
+    <param name="max_distance" value="200"/>
+    <param name="min_distance" value="0.2"/>
+    <param name="resolution_type" value="0.5cm"/>
+    <param name="intensity_mode" value="1"/>
+
+    <remap from="rslidar_points" to="rslidar32_points_stamped" />
+  </node>
+
+
+</launch>
