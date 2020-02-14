@@ -86,7 +86,7 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
   //outPoints->clear();
   // process each packet provided by the driver
 
-  outMsg.header.stamp = scanMsg->header.stamp;
+  outMsg.header.stamp = scanMsg->packets[0].stamp;   // The timestamp in the header of the scanMsg belongs to the last packet, not the first one...
   outMsg.header.frame_id = scanMsg->header.frame_id;
   outMsg.height = height;
   outMsg.width = width;

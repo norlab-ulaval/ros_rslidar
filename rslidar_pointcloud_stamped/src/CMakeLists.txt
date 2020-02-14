@@ -2,14 +2,13 @@ add_library(rslidar_data_stamped rawdata.cc)
 target_link_libraries(rslidar_data_stamped
     ${catkin_LIBRARIES}
     ${libpcap_LIBRARIES}
-    ${POINTMATCHER_LIBRARIES}
     )
 
 add_library(rslidar_point_stamped convert.cc)
 target_link_libraries(rslidar_point_stamped
     rslidar_data_stamped
     ${catkin_LIBRARIES}
-    ${POINTMATCHER_LIBRARIES})
+    )
 
 
 #add_library(cloud_nodelet cloud_nodelet.cc)
@@ -26,4 +25,4 @@ target_link_libraries(cloud_node_stamped
     rslidar_point_stamped
     ${catkin_LIBRARIES}
     ${libpcap_LIBRARIES}
-    ${POINTMATCHER_LIBRARIES})
+    )

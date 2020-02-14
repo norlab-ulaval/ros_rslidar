@@ -14,18 +14,17 @@ set(${PROJECT_NAME}_CATKIN_DEPS
     rslidar_driver
     rslidar_msgs
     dynamic_reconfigure
-    libpointmatcher_ros
 )
 
 find_package(catkin REQUIRED COMPONENTS
              ${${PROJECT_NAME}_CATKIN_DEPS} pcl_conversions)
 find_package(Boost COMPONENTS signals)
 find_package(PkgConfig REQUIRED)
-find_package(libpointmatcher REQUIRED)
 include_directories(${catkin_INCLUDE_DIRS}
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
   ${pointmatcher_INCLUDE_DIRS}
 )
+
 
 generate_dynamic_reconfigure_options(cfg/CloudNode.cfg)
 add_subdirectory(src)
