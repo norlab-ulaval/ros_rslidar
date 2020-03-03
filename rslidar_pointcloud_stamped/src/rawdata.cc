@@ -1076,11 +1076,11 @@ void RawData::unpack_RS32(const rslidar_msgs::rslidarPacket& pkt, pcl::PointClou
  *  @param pc shared pointer to point cloud (points are appended)
  */
 void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
-                             std::vector<float>&  x_vect,
-                             std::vector<float>&  y_vect,
-                             std::vector<float>&  z_vect,
-                             std::vector<float>&  intensity_vect,
-                             std::vector<uint32_t>&  time_offset_vect,
+                             std::vector<float>& x_vect,
+                             std::vector<float>& y_vect,
+                             std::vector<float>& z_vect,
+                             std::vector<float>& intensity_vect,
+                             std::vector<uint32_t>& time_offset_vect,
                              ros::Time& first_stamp)
 {
     //check pkt header
@@ -1101,6 +1101,7 @@ void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
     int azimuth_corrected;
 
     const raw_packet_t* raw = (const raw_packet_t*)&pkt.data[42];
+
     uint32_t nanosecs_since_the_beginning_of_the_bag = (pkt.stamp - first_stamp).toNSec();
 
     for (int block = 0; block < BLOCKS_PER_PACKET; block++, this->block_num++)  // 1 packet:12 data blocks
@@ -1181,7 +1182,10 @@ void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
                 float arg_vert = VERT_ANGLE[dsr];
                 //pcl::PointXYZI point;
                 int output_vector_index = (2 * this->block_num + firing)*RS16_SCANS_PER_FIRING + dsr;
-                uint32_t beam_time_offset = 0; //TODO VK: Compute the offset
+                uint32_t beam_time_offset = 50000*(block) + 3000*(dsr) + nanosecs_since_the_beginning_of_the_bag;  // nanoseconds
+                //VK: This is Time_offset = 50us * (sequence_index -1) + 3us * (data_index-1) from the datasheet
+                //VK: Instead of using their global counter this->block_num, I use the timestamp of the current
+                // data packet (nanosecs_since_the_beginning_of_the_bag) - it seems to be more precise...
 
                 if (distance2 > max_distance_ || distance2 < min_distance_ ||
                     (angle_flag_ && (arg_horiz < start_angle_ || arg_horiz > end_angle_)) ||
@@ -1318,14 +1322,13 @@ void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
                 float arg_horiz = (float)azimuth_corrected / 18000.0f * M_PI;
                 float arg_vert = VERT_ANGLE[dsr];
                 //pcl::PointXYZI point;
+
                 int output_vector_index = (this->block_num)*RS32_SCANS_PER_FIRING + dsr;
-                //uint32_t beam_time_offset_bad = 50000*(this->block_num) + 3000*(dsr%16);   // nanoseconds
                 uint32_t beam_time_offset = 50000*(block) + 3000*(dsr%16) + nanosecs_since_the_beginning_of_the_bag;   // nanoseconds
                 //VK: This is Time_offset = 50us * (sequence_index -1) + 3us * (mod(data_index,16)-1) from the datasheet
+                //VK: Instead of using their global counter this->block_num, I use the timestamp of the current
+                // data packet (nanosecs_since_the_beginning_of_the_bag) - it seems to be more precise...
 
-                //std::cout << "Block num: " << this->block_num << ", dsr: " << dsr << ", local_block_num: " <<  block <<
-                //", time offset bad?:" << beam_time_offset_bad << " ns., good?: " << beam_time_offset << "ns., diff between blocks:" <<
-                //nanosecs_since_the_beginning_of_the_bag << "ns." << std::endl;
 
                 if (distance2 > max_distance_ || distance2 < min_distance_ ||
                     (angle_flag_ && (arg_horiz < start_angle_ || arg_horiz > end_angle_)) ||

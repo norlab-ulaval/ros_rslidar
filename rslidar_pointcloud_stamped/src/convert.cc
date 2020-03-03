@@ -80,7 +80,6 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
   std::vector<float> intensity_vect(num_of_points);
   std::vector<uint32_t> time_offset_vect(num_of_points);
 
-
   //outPoints->header.stamp = pcl_conversions::toPCL(scanMsg->header).stamp;
   //outPoints->header.frame_id = scanMsg->header.frame_id;
   //outPoints->clear();
@@ -92,8 +91,6 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
   outMsg.width = width;
   outMsg.is_dense = is_dense;
 
-
-  std::cout << "-------------------------------------" << std::endl;
 
   data_->block_num = 0;
   for (size_t i = 0; i < scanMsg->packets.size(); ++i)
