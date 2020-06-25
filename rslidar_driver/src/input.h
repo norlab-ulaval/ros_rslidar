@@ -78,6 +78,7 @@ protected:
   ros::NodeHandle private_nh_;
   uint16_t port_;
   std::string devip_str_;
+  std::string hostip_str_;
   int cur_rpm_;
   int return_mode_;
   bool npkt_update_flag_;
@@ -97,6 +98,7 @@ private:
 private:
   int sockfd_;
   in_addr devip_;
+  in_addr hostip_;
 
 };
 

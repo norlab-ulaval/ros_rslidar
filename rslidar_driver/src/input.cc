@@ -48,6 +48,11 @@ Input::Input(ros::NodeHandle private_nh, uint16_t port) : private_nh_(private_nh
   private_nh.param("device_ip", devip_str_, std::string(""));
   if (!devip_str_.empty())
     ROS_INFO_STREAM("Only accepting packets from IP address: " << devip_str_);
+
+  private_nh.param("host_ip", hostip_str_, std::string(""));
+  if (!hostip_str_.empty())
+    ROS_INFO_STREAM("Only accepting packets sent to: " << hostip_str_);
+  
 }
 
 int Input::getRpm(void)
@@ -87,6 +92,11 @@ InputSocket::InputSocket(ros::NodeHandle private_nh, uint16_t port) : Input(priv
     inet_aton(devip_str_.c_str(), &devip_);
   }
 
+  if (!hostip_str_.empty())
+  {
+    inet_aton(hostip_str_.c_str(), &hostip_);
+  }
+
   ROS_INFO_STREAM("Opening UDP socket: port " << port);
   sockfd_ = socket(PF_INET, SOCK_DGRAM, 0);
   if (sockfd_ == -1)
@@ -106,8 +116,13 @@ InputSocket::InputSocket(ros::NodeHandle private_nh, uint16_t port) : Input(priv
   memset(&my_addr, 0, sizeof(my_addr));  // initialize to zeros
   my_addr.sin_family = AF_INET;          // host byte order
   my_addr.sin_port = htons(port);        // port in network byte order
-  my_addr.sin_addr.s_addr = INADDR_ANY;  // automatically fill in my IP
-
+  if (!hostip_str_.empty())
+  {
+    my_addr.sin_addr.s_addr = hostip_.s_addr;  // fill in IP specified by the ros param
+  }else
+  {
+    my_addr.sin_addr.s_addr = INADDR_ANY;  // bind to all interfaces
+  }
   if (bind(sockfd_, (sockaddr*)&my_addr, sizeof(sockaddr)) == -1)
   {
     perror("bind");  // TODO: ROS_ERROR errno
