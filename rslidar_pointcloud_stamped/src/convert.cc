@@ -78,6 +78,7 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
   std::vector<float> y_vect(num_of_points);
   std::vector<float> z_vect(num_of_points);
   std::vector<float> intensity_vect(num_of_points);
+  std::vector<uint32_t> ring_vect(num_of_points);
   std::vector<uint32_t> time_offset_vect(num_of_points);
 
   //outPoints->header.stamp = pcl_conversions::toPCL(scanMsg->header).stamp;
@@ -95,7 +96,7 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
   data_->block_num = 0;
   for (size_t i = 0; i < scanMsg->packets.size(); ++i)
   {
-    data_->unpack_stamped(scanMsg->packets[i], x_vect, y_vect, z_vect, intensity_vect, time_offset_vect, outMsg.header.stamp);
+    data_->unpack_stamped(scanMsg->packets[i], x_vect, y_vect, z_vect, intensity_vect, ring_vect, time_offset_vect, outMsg.header.stamp);
   }
 
   //TODO: Fill the message with data in the vectors:
@@ -103,27 +104,30 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
 
   sensor_msgs::PointCloud2Modifier pcd_modifier(outMsg);
   // this call also resizes the data structure according to the given width, height and fields
-  pcd_modifier.setPointCloud2Fields(5, "x", 1, sensor_msgs::PointField::FLOAT32,
+  pcd_modifier.setPointCloud2Fields(6, "x", 1, sensor_msgs::PointField::FLOAT32,
                                        "y", 1, sensor_msgs::PointField::FLOAT32,
                                        "z", 1, sensor_msgs::PointField::FLOAT32,
                                        "intensity", 1, sensor_msgs::PointField::FLOAT32,
+                                       "rings", 1, sensor_msgs::PointField::UINT32,
                                        "t", 1, sensor_msgs::PointField::UINT32);
 
   sensor_msgs::PointCloud2Iterator<float> iter_x(outMsg, "x");
   sensor_msgs::PointCloud2Iterator<float> iter_y(outMsg, "y");
   sensor_msgs::PointCloud2Iterator<float> iter_z(outMsg, "z");
   sensor_msgs::PointCloud2Iterator<float> iter_i(outMsg, "intensity");
+  sensor_msgs::PointCloud2Iterator<uint32_t> iter_r(outMsg, "rings");
   sensor_msgs::PointCloud2Iterator<uint32_t> iter_t(outMsg, "t");
 
 
   int index_in_vectors;
-  for (index_in_vectors = 0; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z, ++iter_i, ++iter_t, ++index_in_vectors)
+  for (index_in_vectors = 0; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z, ++iter_i, ++iter_r, ++iter_t, ++index_in_vectors)
   {
       // copy the data
       *iter_x = x_vect[index_in_vectors];
       *iter_y = y_vect[index_in_vectors];
       *iter_z = z_vect[index_in_vectors];
       *iter_i = intensity_vect[index_in_vectors];
+      *iter_r = ring_vect[index_in_vectors];
       *iter_t = time_offset_vect[index_in_vectors];
 
   }

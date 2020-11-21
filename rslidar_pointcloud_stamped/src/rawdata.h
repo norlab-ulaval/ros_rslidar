@@ -144,6 +144,7 @@ public:
                       std::vector<float>&  y_vect,
                       std::vector<float>&  z_vect,
                       std::vector<float>&  intensity_vect,
+                      std::vector<uint32_t>&  ring_vect,
                       std::vector<uint32_t>&  time_offset_vect,
                       ros::Time& first_stamp
                       );
@@ -157,6 +158,7 @@ public:
                            std::vector<float>&  y_vect,
                            std::vector<float>&  z_vect,
                            std::vector<float>&  intensity_vect,
+                           std::vector<uint32_t>&  ring_vect,
                            std::vector<uint32_t>&  time_offset_vect,
                            ros::Time& first_stamp
                            );

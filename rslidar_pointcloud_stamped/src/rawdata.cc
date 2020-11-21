@@ -1080,6 +1080,7 @@ void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
                              std::vector<float>& y_vect,
                              std::vector<float>& z_vect,
                              std::vector<float>& intensity_vect,
+			     std::vector<uint32_t>& ring_vect,
                              std::vector<uint32_t>& time_offset_vect,
                              ros::Time& first_stamp)
 {
@@ -1091,7 +1092,7 @@ void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
 
     if (numOfLasers == 32)
     {
-        unpack_RS32_stamped(pkt, x_vect, y_vect, z_vect, intensity_vect, time_offset_vect, first_stamp);
+        unpack_RS32_stamped(pkt, x_vect, y_vect, z_vect, intensity_vect, ring_vect, time_offset_vect, first_stamp);
         return;
     }
     float azimuth;  // 0.01 dgree
@@ -1195,6 +1196,7 @@ void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
                     y_vect[output_vector_index] = NAN;
                     z_vect[output_vector_index] = NAN;
                     intensity_vect[output_vector_index] = 0;
+		    ring_vect[output_vector_index] = dsr;
                     time_offset_vect[output_vector_index] = beam_time_offset;
                 }
                 else
@@ -1209,6 +1211,7 @@ void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
                     y_vect[output_vector_index] = -distance2 * cos(arg_vert) * sin(arg_horiz) - R1_ * sin(arg_horiz_orginal);
                     z_vect[output_vector_index] = distance2 * sin(arg_vert) - R2_;
                     intensity_vect[output_vector_index] = intensity;
+		    ring_vect[output_vector_index] = dsr;
                     time_offset_vect[output_vector_index] = beam_time_offset;
                 }
             }
@@ -1222,6 +1225,7 @@ void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
                                   std::vector<float>&  y_vect,
                                   std::vector<float>&  z_vect,
                                   std::vector<float>&  intensity_vect,
+				  std::vector<uint32_t>& ring_vect,
                                   std::vector<uint32_t>&  time_offset_vect,
                                   ros::Time& first_stamp
                                   )
@@ -1338,6 +1342,7 @@ void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
                     y_vect[output_vector_index] = NAN;
                     z_vect[output_vector_index] = NAN;
                     intensity_vect[output_vector_index] = 0;
+		    ring_vect[output_vector_index] = dsr;
                     time_offset_vect[output_vector_index] = beam_time_offset;
                 }
                 else
@@ -1351,6 +1356,7 @@ void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
                     y_vect[output_vector_index]  = -distance2 * cos(arg_vert) * sin(arg_horiz) - R1_ * sin(arg_horiz_orginal);
                     z_vect[output_vector_index]  = distance2 * sin(arg_vert) - R2_;
                     intensity_vect[output_vector_index] = intensity;
+		    ring_vect[output_vector_index] = dsr;
                     time_offset_vect[output_vector_index] = beam_time_offset;
                 }
             }
@@ -1421,6 +1427,7 @@ void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
                     y_vect[output_vector_index] = NAN;
                     z_vect[output_vector_index] = NAN;
                     intensity_vect[output_vector_index] = 0;
+		    ring_vect[output_vector_index] = dsr;
                     time_offset_vect[output_vector_index] = beam_time_offset;
                 }
                 else
@@ -1434,6 +1441,7 @@ void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
                     y_vect[output_vector_index] = -distance2 * cos(arg_vert) * sin(arg_horiz) - R1_ * sin(arg_horiz_orginal);
                     z_vect[output_vector_index] = distance2 * sin(arg_vert) - R2_;
                     intensity_vect[output_vector_index] = intensity;
+		    ring_vect[output_vector_index] = dsr;
                     time_offset_vect[output_vector_index] = beam_time_offset;
                 }
             }
