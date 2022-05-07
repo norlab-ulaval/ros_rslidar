@@ -78,7 +78,7 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
   std::vector<float> y_vect(num_of_points);
   std::vector<float> z_vect(num_of_points);
   std::vector<float> intensity_vect(num_of_points);
-  std::vector<uint32_t> ring_vect(num_of_points);
+  std::vector<uint16_t> ring_vect(num_of_points);
   std::vector<uint32_t> time_offset_vect(num_of_points);
 
   //outPoints->header.stamp = pcl_conversions::toPCL(scanMsg->header).stamp;
@@ -108,14 +108,14 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
                                        "y", 1, sensor_msgs::PointField::FLOAT32,
                                        "z", 1, sensor_msgs::PointField::FLOAT32,
                                        "intensity", 1, sensor_msgs::PointField::FLOAT32,
-                                       "rings", 1, sensor_msgs::PointField::UINT32,
+                                       "ring", 1, sensor_msgs::PointField::UINT16,
                                        "t", 1, sensor_msgs::PointField::UINT32);
 
   sensor_msgs::PointCloud2Iterator<float> iter_x(outMsg, "x");
   sensor_msgs::PointCloud2Iterator<float> iter_y(outMsg, "y");
   sensor_msgs::PointCloud2Iterator<float> iter_z(outMsg, "z");
   sensor_msgs::PointCloud2Iterator<float> iter_i(outMsg, "intensity");
-  sensor_msgs::PointCloud2Iterator<uint32_t> iter_r(outMsg, "rings");
+  sensor_msgs::PointCloud2Iterator<uint16_t> iter_r(outMsg, "ring");
   sensor_msgs::PointCloud2Iterator<uint32_t> iter_t(outMsg, "t");
 
 
