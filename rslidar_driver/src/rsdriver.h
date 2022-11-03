@@ -16,16 +16,14 @@
 #define _RSDRIVER_H_
 
 #include <string>
-#include <ros/ros.h>
-#include <ros/package.h>
-#include <std_msgs/Int32.h>
-#include <diagnostic_updater/diagnostic_updater.h>
-#include <diagnostic_updater/publisher.h>
-#include <dynamic_reconfigure/server.h>
-#include <rslidar_driver/rslidarNodeConfig.h>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/int32.hpp>
+#include <diagnostic_updater/diagnostic_updater.hpp>
+#include <diagnostic_updater/publisher.hpp>
 #include <pcl/point_types.h>
 #include <pcl_ros/impl/transforms.hpp>
 #include <pcl_conversions/pcl_conversions.h>
+#include <boost/thread.hpp>
 #include "input.h"
 
 namespace rslidar_driver
@@ -38,7 +36,7 @@ public:
  * @param node          raw packet output topic
  * @param private_nh    通过这个节点传参数
  */
-  rslidarDriver(ros::NodeHandle node, ros::NodeHandle private_nh);
+  rslidarDriver(std::shared_ptr<rclcpp::Node> node);
 
   ~rslidarDriver()
   {
@@ -48,13 +46,8 @@ public:
   void difopPoll(void);
 
 private:
-  /// Callback for dynamic reconfigure
-  void callback(rslidar_driver::rslidarNodeConfig& config, uint32_t level);
   /// Callback for skip num for time synchronization
-  void skipNumCallback(const std_msgs::Int32::ConstPtr& skip_num);
-
-  /// Pointer to dynamic reconfigure service srv_
-  boost::shared_ptr<dynamic_reconfigure::Server<rslidar_driver::rslidarNodeConfig> > srv_;
+  void skipNumCallback(const std_msgs::msg::Int32& skip_num);
 
   // configuration parameters
   struct
@@ -67,11 +60,12 @@ private:
     int cut_angle;
   } config_;
 
+  std::shared_ptr<rclcpp::Node> node;
   boost::shared_ptr<Input> msop_input_;
   boost::shared_ptr<Input> difop_input_;
-  ros::Publisher msop_output_;
-  ros::Publisher difop_output_;
-  ros::Publisher output_sync_;
+  rclcpp::Publisher<rslidar_msgs::msg::RslidarScan>::SharedPtr msop_output_;
+  rclcpp::Publisher<rslidar_msgs::msg::RslidarPacket>::SharedPtr difop_output_;
+  rclcpp::Publisher<sensor_msgs::msg::TimeReference>::SharedPtr output_sync_;
   // Converter convtor_;
   /** diagnostics updater */
   diagnostic_updater::Updater diagnostics_;
@@ -83,7 +77,7 @@ private:
   // add for time synchronization
   bool time_synchronization_;
   uint32_t skip_num_;
-  ros::Subscriber skip_num_sub_;
+  rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr skip_num_sub_;
 };
 
 }  // namespace rslidar_driver
