@@ -14,10 +14,10 @@
 #include <rclcpp/rclcpp.hpp>
 #include "rsdriver.h"
 
-class RSLidarNode : public rclcpp::Node
+class RSDriverNode : public rclcpp::Node
 {
 public:
-    RSLidarNode():
+    RSDriverNode():
             Node("rsdriver")
     {
     }
@@ -36,7 +36,7 @@ int main(int argc, char**argv)
     rclcpp::init(argc, argv);
     signal(SIGINT, my_handler);
 
-    std::shared_ptr<rclcpp::Node> node = std::make_shared<RSLidarNode>();
+    std::shared_ptr<rclcpp::Node> node = std::make_shared<RSDriverNode>();
 
     // start the driver
     rslidar_driver::rslidarDriver dvr(node);

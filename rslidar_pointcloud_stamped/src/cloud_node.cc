@@ -13,18 +13,27 @@
 */
 #include "convert.h"
 
+class CloudNode : public rclcpp::Node
+{
+public:
+    CloudNode():
+            Node("cloud_node")
+    {
+    }
+};
+
 /** Main node entry point. */
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "cloud_node");
-  ros::NodeHandle node;
-  ros::NodeHandle priv_nh("~");
+  rclcpp::init(argc, argv);
+
+  std::shared_ptr<rclcpp::Node> node = std::make_shared<CloudNode>();
 
   // create conversion class, which subscribes to raw data
-  rslidar_pointcloud::Convert conv(node, priv_nh);
+  rslidar_pointcloud::Convert conv(node);
 
   // handle callbacks until shut down
-  ros::spin();
+  rclcpp::spin(node);
 
   return 0;
 }
