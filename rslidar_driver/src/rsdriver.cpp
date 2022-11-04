@@ -298,7 +298,7 @@ void rslidarDriver::difopPoll(void)
     }
     if (rc < 0)
       return;  // end of file reached?
-    rclcpp::spin_some(node);
+    //rclcpp::spin_some(node); removed this line during ros2 migration, this made the node crash and it seems to be working without it
   }
 }
 

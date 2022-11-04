@@ -39,5 +39,8 @@ target_link_libraries(cloud_node_stamped
 install(TARGETS cloud_node_stamped
   DESTINATION lib/${PROJECT_NAME}
 )
+install(DIRECTORY data
+  DESTINATION share/${PROJECT_NAME}
+)
 
 ament_package()

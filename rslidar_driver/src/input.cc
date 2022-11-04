@@ -247,11 +247,14 @@ InputPCAP::InputPCAP(std::shared_ptr<rclcpp::Node> node, uint16_t port, double p
   empty_ = true;
 
   // get parameters using private node handle
-  node->declare_parameter<bool>("read_once", false);
+  if(!node->has_parameter("read_once"))
+    node->declare_parameter<bool>("read_once", false);
   node->get_parameter("read_once", read_once_);
-  node->declare_parameter<bool>("read_fast", false);
+  if(!node->has_parameter("read_fast"))
+    node->declare_parameter<bool>("read_fast", false);
   node->get_parameter("read_fast", read_fast_);
-  node->declare_parameter<double>("repeat_delay", 0.0);
+  if(!node->has_parameter("repeat_delay"))
+    node->declare_parameter<double>("repeat_delay", 0.0);
   node->get_parameter("repeat_delay", repeat_delay_);
 
   if (read_once_)
