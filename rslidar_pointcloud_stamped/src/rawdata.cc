@@ -21,6 +21,19 @@
 
 namespace rslidar_rawdata
 {
+float VERT_ANGLE[32];
+float HORI_ANGLE[32];
+float aIntensityCal[7][32];
+float aIntensityCal_old[1600][32];
+bool Curvesis_new = true;
+int g_ChannelNum[32][51];
+float CurvesRate[32];
+
+float temper = 31.0;
+int tempPacketNum = 0;
+int numOfLasers = 16;
+int TEMPERATURE_RANGE = 40;
+
 RawData::RawData()
 {
   this->is_init_angle_ = false;
@@ -28,53 +41,63 @@ RawData::RawData()
   this->is_init_top_fw_ = false;
 }
 
-void RawData::loadConfigFile(ros::NodeHandle node, ros::NodeHandle private_nh)
+void RawData::loadConfigFile(std::shared_ptr<rclcpp::Node> node)
 {
   std::string anglePath, curvesPath, channelPath, curvesRatePath;
   std::string model;
   std::string resolution_param;
 
-  private_nh.param("curves_path", curvesPath, std::string(""));
-  private_nh.param("angle_path", anglePath, std::string(""));
-  private_nh.param("channel_path", channelPath, std::string(""));
-  private_nh.param("curves_rate_path", curvesRatePath, std::string(""));
-  private_nh.param("start_angle", start_angle_, float(0));
-  private_nh.param("end_angle", end_angle_, float(360));
+  node->declare_parameter<std::string>("curves_path", "");
+  node->get_parameter("curves_path", curvesPath);
+  node->declare_parameter<std::string>("angle_path", "");
+  node->get_parameter("angle_path", anglePath);
+  node->declare_parameter<std::string>("channel_path", "");
+  node->get_parameter("channel_path", channelPath);
+  node->declare_parameter<std::string>("curves_rate_path", curvesRatePath);
+  node->get_parameter("curves_rate_path", curvesRatePath);
+  node->declare_parameter<float>("start_angle", 0);
+  node->get_parameter("start_angle", start_angle_);
+  node->declare_parameter<float>("end_angle", 360);
+  node->get_parameter("end_angle", end_angle_);
 
   if (start_angle_ < 0 || start_angle_ > 360 || end_angle_ < 0 || end_angle_ > 360)
   {
     start_angle_ = 0;
     end_angle_ = 360;
-    ROS_INFO_STREAM("start angle and end angle select feature deactivated.");
+    RCLCPP_INFO_STREAM(node->get_logger(), "start angle and end angle select feature deactivated.");
   }
   else
   {
-    ROS_INFO_STREAM("start angle and end angle select feature activated.");
+    RCLCPP_INFO_STREAM(node->get_logger(), "start angle and end angle select feature activated.");
   }
 
   angle_flag_ = true;
   if (start_angle_ > end_angle_)
   {
     angle_flag_ = false;
-    ROS_INFO_STREAM("Start angle is smaller than end angle, not the normal state!");
+    RCLCPP_INFO_STREAM(node->get_logger(), "Start angle is smaller than end angle, not the normal state!");
   }
 
-  ROS_INFO_STREAM("start_angle: " << start_angle_ << " end_angle: " << end_angle_ << " angle_flag: " << angle_flag_);
+  RCLCPP_INFO_STREAM(node->get_logger(), "start_angle: " << start_angle_ << " end_angle: " << end_angle_ << " angle_flag: " << angle_flag_);
   //std::cout << "start_angle: " << start_angle_ << " end_angle: " << end_angle_ << " angle_flag: " << angle_flag_
   //          << std::endl;
   start_angle_ = start_angle_ / 180 * M_PI;
   end_angle_ = end_angle_ / 180 * M_PI;
 
-  private_nh.param("max_distance", max_distance_, 200.0f);
-  private_nh.param("min_distance", min_distance_, 0.2f);
+  node->declare_parameter<float>("max_distance", 200);
+  node->get_parameter("max_distance", max_distance_);
+  node->declare_parameter<float>("min_distance", 0.2);
+  node->get_parameter("min_distance", min_distance_);
 
-  ROS_INFO_STREAM("distance threshlod, max: " << max_distance_ << ", min: " << min_distance_);
+  RCLCPP_INFO_STREAM(node->get_logger(), "distance threshlod, max: " << max_distance_ << ", min: " << min_distance_);
 
 
   intensity_mode_ = 1;
   info_print_flag_ = false;
-  private_nh.param("resolution_type", resolution_param, std::string("0.5cm"));
-  private_nh.param("intensity_mode", intensity_mode_, 1);
+  node->declare_parameter<std::string>("resolution_type", "0.5cm");
+  node->get_parameter("resolution_type", resolution_param);
+  node->declare_parameter<int>("intensity_mode", 1);
+  node->get_parameter("intensity_mode", intensity_mode_);
 
   if (resolution_param == "0.5cm")
   {
@@ -85,9 +108,10 @@ void RawData::loadConfigFile(ros::NodeHandle node, ros::NodeHandle private_nh)
     dis_resolution_mode_ = 1;
   }
 
-  ROS_INFO_STREAM("initialize resolution type: " << (dis_resolution_mode_?"1cm":"0.5cm") << ", intensity mode: " << intensity_mode_);
+  RCLCPP_INFO_STREAM(node->get_logger(), "initialize resolution type: " << (dis_resolution_mode_?"1cm":"0.5cm") << ", intensity mode: " << intensity_mode_);
 
-  private_nh.param("model", model, std::string("RS16"));
+  node->declare_parameter<std::string>("model", "RS16");
+  node->get_parameter("model", model);
   if (model == "RS16")
   {
     numOfLasers = 16;
@@ -114,7 +138,7 @@ void RawData::loadConfigFile(ros::NodeHandle node, ros::NodeHandle private_nh)
   int loop_num;
   if (!f_inten)
   {
-    ROS_ERROR_STREAM(curvesPath << " does not exist");
+    RCLCPP_ERROR_STREAM(node->get_logger(), curvesPath << " does not exist");
   }
   else
   {
@@ -174,7 +198,7 @@ void RawData::loadConfigFile(ros::NodeHandle node, ros::NodeHandle private_nh)
   FILE* f_angle = fopen(anglePath.c_str(), "r");
   if (!f_angle)
   {
-    ROS_ERROR_STREAM(anglePath << " does not exist");
+    RCLCPP_ERROR_STREAM(node->get_logger(), anglePath << " does not exist");
   }
   else
   {
@@ -200,7 +224,7 @@ void RawData::loadConfigFile(ros::NodeHandle node, ros::NodeHandle private_nh)
   FILE* f_channel = fopen(channelPath.c_str(), "r");
   if (!f_channel)
   {
-    ROS_ERROR_STREAM(channelPath << " does not exist");
+    RCLCPP_ERROR_STREAM(node->get_logger(), channelPath << " does not exist");
   }
   else
   {
@@ -248,7 +272,7 @@ void RawData::loadConfigFile(ros::NodeHandle node, ros::NodeHandle private_nh)
     FILE* f_curvesRate = fopen(curvesRatePath.c_str(), "r");
     if (!f_curvesRate)
     {
-      ROS_ERROR_STREAM(curvesRatePath << " does not exist");
+      RCLCPP_ERROR_STREAM(node->get_logger(), curvesRatePath << " does not exist");
       for (int i = 0; i < 32; ++i)
       {
         CurvesRate[i] = 1.0;
@@ -271,13 +295,13 @@ void RawData::loadConfigFile(ros::NodeHandle node, ros::NodeHandle private_nh)
   // receive difop data
   // subscribe to difop rslidar packets, if not right correct data in difop, it will not revise the correct data in the
   // VERT_ANGLE, HORI_ANGLE etc.
-  difop_sub_ = node.subscribe("rslidar_packets_difop", 10, &RawData::processDifop, (RawData*)this);
+  difop_sub_ = node->create_subscription<rslidar_msgs::msg::RslidarPacket>("rslidar_packets_difop", 10, std::bind(&RawData::processDifop, this, std::placeholders::_1));
 }
 
-void RawData::processDifop(const rslidar_msgs::rslidarPacket::ConstPtr& difop_msg)
+void RawData::processDifop(const rslidar_msgs::msg::RslidarPacket& difop_msg)
 {
   // std::cout << "Enter difop callback!" << std::endl;
-  const uint8_t* data = &difop_msg->data[0];
+  const uint8_t* data = &difop_msg.data[0];
   bool is_support_dual_return = false;
 
   // check header
@@ -378,7 +402,7 @@ void RawData::processDifop(const rslidar_msgs::rslidarPacket::ConstPtr& difop_ms
           aIntensityCal[6][loopn] = (bit1 * 256 + bit2) * 0.001;
         }
         this->is_init_curve_ = true;
-        ROS_INFO_STREAM("curves data is wrote in difop packet!");
+        RCLCPP_INFO_STREAM(node->get_logger(), "curves data is wrote in difop packet!");
         //std::cout << "this->is_init_curve_ = "
         //          << "true!" << std::endl;
         Curvesis_new = true;
@@ -443,7 +467,7 @@ void RawData::processDifop(const rslidar_msgs::rslidarPacket::ConstPtr& difop_ms
           HORI_ANGLE[loopn] = 0;
         }
         this->is_init_angle_ = true;
-        ROS_INFO_STREAM("angle data is wrote in difop packet!");
+        RCLCPP_INFO_STREAM(node->get_logger(), "angle data is wrote in difop packet!");
         //std::cout << "this->is_init_angle_ = "
         //          << "true!" << std::endl;
       }
@@ -460,17 +484,17 @@ void RawData::processDifop(const rslidar_msgs::rslidarPacket::ConstPtr& difop_ms
       prin_dis = 0.5;
     else
       prin_dis = 1;
-    ROS_INFO_STREAM("distance resolution is: " << prin_dis << "cm, intensity mode is: Mode" << intensity_mode_);
+    RCLCPP_INFO_STREAM(node->get_logger(), "distance resolution is: " << prin_dis << "cm, intensity mode is: Mode" << intensity_mode_);
     if (is_support_dual_return == false)
-      ROS_INFO_STREAM("lidar only support single return wave!");
+      RCLCPP_INFO_STREAM(node->get_logger(), "lidar only support single return wave!");
     else
     {
       if (return_mode_ == 0)
-        ROS_INFO_STREAM("lidar support dual return wave, the current mode is: dual return wave mode!");
+        RCLCPP_INFO_STREAM(node->get_logger(), "lidar support dual return wave, the current mode is: dual return wave mode!");
       else if (return_mode_ == 1)
-        ROS_INFO_STREAM("lidar support dual return wave, the current mode is: strongest return wave mode!");
+        RCLCPP_INFO_STREAM(node->get_logger(), "lidar support dual return wave, the current mode is: strongest return wave mode!");
       else if (return_mode_ == 2)
-        ROS_INFO_STREAM("lidar support dual return wave, the current mode is: last return wave mode!");
+        RCLCPP_INFO_STREAM(node->get_logger(), "lidar support dual return wave, the current mode is: last return wave mode!");
     }
   }
   // std::cout << "DIFOP data! +++++++++++++" << std::endl;
@@ -736,7 +760,7 @@ int RawData::estimateTemperature(float Temper)
  *  @param pkt raw packet to unpack
  *  @param pc shared pointer to point cloud (points are appended)
  */
-void RawData::unpack(const rslidar_msgs::rslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud)
+void RawData::unpack(const rslidar_msgs::msg::RslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud)
 {
   //check pkt header
   if (pkt.data[0] != 0x55 || pkt.data[1] != 0xAA || pkt.data[2] != 0x05 || pkt.data[3] != 0x0A)
@@ -761,7 +785,7 @@ void RawData::unpack(const rslidar_msgs::rslidarPacket& pkt, pcl::PointCloud<pcl
   {
     if (UPPER_BANK != raw->blocks[block].header)
     {
-      ROS_INFO_STREAM_THROTTLE(180, "skipping RSLIDAR DIFOP packet");
+      RCLCPP_INFO_STREAM_THROTTLE(node->get_logger(), *node->get_clock(), 180, "skipping RSLIDAR DIFOP packet");
       break;
     }
 
@@ -865,7 +889,7 @@ void RawData::unpack(const rslidar_msgs::rslidarPacket& pkt, pcl::PointCloud<pcl
 }
 
 
-void RawData::unpack_RS32(const rslidar_msgs::rslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud)
+void RawData::unpack_RS32(const rslidar_msgs::msg::RslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud)
 {
   float azimuth;  // 0.01 dgree
   float intensity;
@@ -880,7 +904,7 @@ void RawData::unpack_RS32(const rslidar_msgs::rslidarPacket& pkt, pcl::PointClou
   {
     if (UPPER_BANK != raw->blocks[block].header)
     {
-      ROS_INFO_STREAM_THROTTLE(180, "skipping RSLIDAR DIFOP packet");
+      RCLCPP_INFO_STREAM_THROTTLE(node->get_logger(), *node->get_clock(), 180, "skipping RSLIDAR DIFOP packet");
       break;
     }
 
@@ -1075,14 +1099,14 @@ void RawData::unpack_RS32(const rslidar_msgs::rslidarPacket& pkt, pcl::PointClou
  *  @param pkt raw packet to unpack
  *  @param pc shared pointer to point cloud (points are appended)
  */
-void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
+void RawData::unpack_stamped(const rslidar_msgs::msg::RslidarPacket& pkt,
                              std::vector<float>& x_vect,
                              std::vector<float>& y_vect,
                              std::vector<float>& z_vect,
                              std::vector<float>& intensity_vect,
                              std::vector<uint16_t>& ring_vect,
                              std::vector<uint32_t>& time_offset_vect,
-                             ros::Time& first_stamp)
+                             rclcpp::Time& first_stamp)
 {
     //check pkt header
     if (pkt.data[0] != 0x55 || pkt.data[1] != 0xAA || pkt.data[2] != 0x05 || pkt.data[3] != 0x0A)
@@ -1103,13 +1127,13 @@ void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
 
     const raw_packet_t* raw = (const raw_packet_t*)&pkt.data[42];
 
-    uint32_t nanosecs_since_the_beginning_of_the_bag = (pkt.stamp - first_stamp).toNSec();
+    uint32_t nanosecs_since_the_beginning_of_the_bag = (rclcpp::Time(pkt.stamp) - first_stamp).nanoseconds();
 
     for (int block = 0; block < BLOCKS_PER_PACKET; block++, this->block_num++)  // 1 packet:12 data blocks
     {
         if (UPPER_BANK != raw->blocks[block].header)
         {
-            ROS_INFO_STREAM_THROTTLE(180, "skipping RSLIDAR DIFOP packet");
+            RCLCPP_INFO_STREAM_THROTTLE(node->get_logger(), *node->get_clock(), 180, "skipping RSLIDAR DIFOP packet");
             break;
         }
 
@@ -1234,14 +1258,14 @@ void RawData::unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
 }
 
 
-void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
+void RawData::unpack_RS32_stamped(const rslidar_msgs::msg::RslidarPacket& pkt,
                                   std::vector<float>&  x_vect,
                                   std::vector<float>&  y_vect,
                                   std::vector<float>&  z_vect,
                                   std::vector<float>&  intensity_vect,
-				  std::vector<uint16_t>& ring_vect,
+				                          std::vector<uint16_t>& ring_vect,
                                   std::vector<uint32_t>&  time_offset_vect,
-                                  ros::Time& first_stamp
+                                  rclcpp::Time& first_stamp
                                   )
 {
     float azimuth;  // 0.01 dgree
@@ -1252,7 +1276,7 @@ void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
 
     const raw_packet_t* raw = (const raw_packet_t*)&pkt.data[42];
 
-    uint32_t nanosecs_since_the_beginning_of_the_bag = (pkt.stamp - first_stamp).toNSec();
+    uint32_t nanosecs_since_the_beginning_of_the_bag = (rclcpp::Time(pkt.stamp) - first_stamp).nanoseconds();
 
     //std::cout << "Last block num: " << this->block_num << ", diff between blocks:" <<
     //          nanosecs_since_the_beginning_of_the_bag << "ns." << std::endl;
@@ -1262,7 +1286,7 @@ void RawData::unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
     {
         if (UPPER_BANK != raw->blocks[block].header)
         {
-            ROS_INFO_STREAM_THROTTLE(180, "skipping RSLIDAR DIFOP packet");
+            RCLCPP_INFO_STREAM_THROTTLE(node->get_logger(), *node->get_clock(), 180, "skipping RSLIDAR DIFOP packet");
             break;
         }
 

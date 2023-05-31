@@ -31,8 +31,9 @@
 #include <stdio.h>
 #include <pcap.h>
 #include <netinet/in.h>
-#include <ros/ros.h>
-#include <rslidar_msgs/rslidarPacket.h>
+#include <rclcpp/rclcpp.hpp>
+#include <rslidar_msgs/msg/rslidar_packet.hpp>
+#include <rslidar_msgs/msg/rslidar_scan.hpp>
 #include <string>
 #include <sstream>
 #include <sys/socket.h>
@@ -42,7 +43,7 @@
 #include <fcntl.h>
 #include <sys/file.h>
 #include <signal.h>
-#include <sensor_msgs/TimeReference.h>
+#include <sensor_msgs/msg/time_reference.hpp>
 
 namespace rslidar_driver
 {
@@ -61,13 +62,13 @@ static uint16_t DIFOP_DATA_PORT_NUMBER = 7788;  // rslidar default difop data po
 class Input
 {
 public:
-  Input(ros::NodeHandle private_nh, uint16_t port);
+  Input(std::shared_ptr<rclcpp::Node> node, uint16_t port);
 
   virtual ~Input()
   {
   }
 
-  virtual int getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_offset) = 0;
+  virtual int getPacket(rslidar_msgs::msg::RslidarPacket* pkt, const double time_offset) = 0;
 
   int getRpm(void);
   int getReturnMode(void);
@@ -75,7 +76,7 @@ public:
   void clearUpdateFlag(void);
 
 protected:
-  ros::NodeHandle private_nh_;
+  std::shared_ptr<rclcpp::Node> node;
   uint16_t port_;
   std::string devip_str_;
   int cur_rpm_;
@@ -87,11 +88,11 @@ protected:
 class InputSocket : public Input
 {
 public:
-  InputSocket(ros::NodeHandle private_nh, uint16_t port = MSOP_DATA_PORT_NUMBER);
+  InputSocket(std::shared_ptr<rclcpp::Node> node, uint16_t port = MSOP_DATA_PORT_NUMBER);
 
   virtual ~InputSocket();
 
-  virtual int getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_offset);
+  virtual int getPacket(rslidar_msgs::msg::RslidarPacket* pkt, const double time_offset);
 
 private:
 private:
@@ -107,15 +108,15 @@ private:
 class InputPCAP : public Input
 {
 public:
-  InputPCAP(ros::NodeHandle private_nh, uint16_t port = MSOP_DATA_PORT_NUMBER, double packet_rate = 0.0,
+  InputPCAP(std::shared_ptr<rclcpp::Node> node, uint16_t port = MSOP_DATA_PORT_NUMBER, double packet_rate = 0.0,
             std::string filename = "", bool read_once = false, bool read_fast = false, double repeat_delay = 0.0);
 
   virtual ~InputPCAP();
 
-  virtual int getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_offset);
+  virtual int getPacket(rslidar_msgs::msg::RslidarPacket* pkt, const double time_offset);
 
 private:
-  ros::Rate packet_rate_;
+  rclcpp::Rate packet_rate_;
   std::string filename_;
   pcap_t* pcap_;
   bpf_program pcap_packet_filter_;

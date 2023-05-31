@@ -22,13 +22,10 @@
 #ifndef _RAWDATA_H
 #define _RAWDATA_H
 
-#include <ros/ros.h>
-#include <ros/package.h>
-#include <rslidar_msgs/rslidarPacket.h>
-#include <rslidar_msgs/rslidarScan.h>
-#include "std_msgs/String.h"
+#include <rclcpp/rclcpp.hpp>
+#include <rslidar_msgs/msg/rslidar_packet.hpp>
+#include <rslidar_msgs/msg/rslidar_scan.hpp>
 #include <pcl/point_types.h>
-#include <pcl_ros/point_cloud.h>
 #include <pcl_ros/impl/transforms.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 #include <stdio.h>
@@ -133,34 +130,34 @@ public:
   }
 
   /*load the cablibrated files: angle, distance, intensity*/
-  void loadConfigFile(ros::NodeHandle node, ros::NodeHandle private_nh);
+  void loadConfigFile(std::shared_ptr<rclcpp::Node> node);
 
   /*unpack the RS16 UDP packet and opuput PCL PointXYZI type*/
-  void unpack(const rslidar_msgs::rslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud);
+  void unpack(const rslidar_msgs::msg::RslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud);
 
   /*unpack the RS16 UDP packet and output several std::vectors with the values*/
-  void unpack_stamped(const rslidar_msgs::rslidarPacket& pkt,
+  void unpack_stamped(const rslidar_msgs::msg::RslidarPacket& pkt,
                       std::vector<float>&  x_vect,
                       std::vector<float>&  y_vect,
                       std::vector<float>&  z_vect,
                       std::vector<float>&  intensity_vect,
                       std::vector<uint16_t>&  ring_vect,
                       std::vector<uint32_t>&  time_offset_vect,
-                      ros::Time& first_stamp
+                      rclcpp::Time& first_stamp
                       );
 
   /*unpack the RS32 UDP packet and output PCL PointXYZI type*/
-  void unpack_RS32(const rslidar_msgs::rslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud);
+  void unpack_RS32(const rslidar_msgs::msg::RslidarPacket& pkt, pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud);
 
   /*unpack the RS32 UDP packet and output several std::vectors with the values*/
-  void unpack_RS32_stamped(const rslidar_msgs::rslidarPacket& pkt,
+  void unpack_RS32_stamped(const rslidar_msgs::msg::RslidarPacket& pkt,
                            std::vector<float>&  x_vect,
                            std::vector<float>&  y_vect,
                            std::vector<float>&  z_vect,
                            std::vector<float>&  intensity_vect,
                            std::vector<uint16_t>&  ring_vect,
                            std::vector<uint32_t>&  time_offset_vect,
-                           ros::Time& first_stamp
+                           rclcpp::Time& first_stamp
                            );
 
 
@@ -183,8 +180,8 @@ public:
   /*estimate the packet type*/
   int isABPacket(int distance);
 
-  void processDifop(const rslidar_msgs::rslidarPacket::ConstPtr& difop_msg);
-  ros::Subscriber difop_sub_;
+  void processDifop(const rslidar_msgs::msg::RslidarPacket& difop_msg);
+  rclcpp::Subscription<rslidar_msgs::msg::RslidarPacket>::SharedPtr difop_sub_;
   bool is_init_curve_;
   bool is_init_angle_;
   bool is_init_top_fw_;
@@ -203,20 +200,8 @@ private:
   int dis_resolution_mode_;
   int return_mode_;
   bool info_print_flag_;
+  std::shared_ptr<rclcpp::Node> node;
 };
-
-float VERT_ANGLE[32];
-float HORI_ANGLE[32];
-float aIntensityCal[7][32];
-float aIntensityCal_old[1600][32];
-bool Curvesis_new = true;
-int g_ChannelNum[32][51];
-float CurvesRate[32];
-
-float temper = 31.0;
-int tempPacketNum = 0;
-int numOfLasers = 16;
-int TEMPERATURE_RANGE = 40;
 
 }  // namespace rslidar_rawdata
 

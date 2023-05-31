@@ -28,7 +28,7 @@
 extern volatile sig_atomic_t flag;
 namespace rslidar_driver
 {
-static const size_t packet_size = sizeof(rslidar_msgs::rslidarPacket().data);
+static const size_t packet_size = sizeof(rslidar_msgs::msg::RslidarPacket().data);
 
 ////////////////////////////////////////////////////////////////////////
 // Input base class implementation
@@ -39,15 +39,17 @@ static const size_t packet_size = sizeof(rslidar_msgs::rslidarPacket().data);
  *  @param private_nh ROS private handle for calling node.
  *  @param port UDP port number.
  */
-Input::Input(ros::NodeHandle private_nh, uint16_t port) : private_nh_(private_nh), port_(port)
+Input::Input(std::shared_ptr<rclcpp::Node> node, uint16_t port) : node(node), port_(port)
 {
   npkt_update_flag_ = false;
   cur_rpm_ = 600;
   return_mode_ = 1;
 
-  private_nh.param("device_ip", devip_str_, std::string(""));
+  if(!node->has_parameter("device_ip"))
+    node->declare_parameter<std::string>("device_ip", "");
+  node->get_parameter("device_ip", devip_str_);
   if (!devip_str_.empty())
-    ROS_INFO_STREAM("Only accepting packets from IP address: " << devip_str_);
+    RCLCPP_INFO_STREAM(node->get_logger(), "Only accepting packets from IP address: " << devip_str_);
 }
 
 int Input::getRpm(void)
@@ -78,7 +80,7 @@ void Input::clearUpdateFlag(void)
    *  @param private_nh ROS private handle for calling node.
    *  @param port UDP port number
 */
-InputSocket::InputSocket(ros::NodeHandle private_nh, uint16_t port) : Input(private_nh, port)
+InputSocket::InputSocket(std::shared_ptr<rclcpp::Node> node, uint16_t port) : Input(node, port)
 {
   sockfd_ = -1;
 
@@ -87,7 +89,7 @@ InputSocket::InputSocket(ros::NodeHandle private_nh, uint16_t port) : Input(priv
     inet_aton(devip_str_.c_str(), &devip_);
   }
 
-  ROS_INFO_STREAM("Opening UDP socket: port " << port);
+  RCLCPP_INFO_STREAM(node->get_logger(), "Opening UDP socket: port " << port);
   sockfd_ = socket(PF_INET, SOCK_DGRAM, 0);
   if (sockfd_ == -1)
   {
@@ -128,9 +130,9 @@ InputSocket::~InputSocket(void)
 }
 
 /** @brief Get one rslidar packet. */
-int InputSocket::getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_offset)
+int InputSocket::getPacket(rslidar_msgs::msg::RslidarPacket* pkt, const double time_offset)
 {
-  double time1 = ros::Time::now().toSec();
+  double time1 = node->get_clock()->now().seconds();
   struct pollfd fds[1];
   fds[0].fd = sockfd_;
   fds[0].events = POLLIN;
@@ -149,12 +151,12 @@ int InputSocket::getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_o
       if (retval < 0)  // poll() error?
       {
         if (errno != EINTR)
-          ROS_ERROR("poll() error: %s", strerror(errno));
+          RCLCPP_ERROR(node->get_logger(), "poll() error: %s", strerror(errno));
         return 1;
       }
       if (retval == 0)  // poll() timeout?
       {
-        ROS_WARN("Rslidar poll() timeout");
+        RCLCPP_WARN(node->get_logger(), "Rslidar poll() timeout");
 
         char buffer_data[8] = "re-con";
         memset(&sender_address, 0, sender_address_len);          // initialize to zeros
@@ -166,7 +168,7 @@ int InputSocket::getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_o
       }
       if ((fds[0].revents & POLLERR) || (fds[0].revents & POLLHUP) || (fds[0].revents & POLLNVAL))  // device error?
       {
-        ROS_ERROR("poll() reports Rslidar error");
+        RCLCPP_ERROR(node->get_logger(), "poll() reports Rslidar error");
         return 1;
       }
     } while ((fds[0].revents & POLLIN) == 0);
@@ -177,7 +179,7 @@ int InputSocket::getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_o
       if (errno != EWOULDBLOCK)
       {
         perror("recvfail");
-        ROS_INFO("recvfail");
+        RCLCPP_INFO(node->get_logger(), "recvfail");
         return 1;
       }
     }
@@ -189,7 +191,7 @@ int InputSocket::getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_o
         break;  // done
     }
 
-    ROS_DEBUG_STREAM("incomplete rslidar packet read: " << nbytes << " bytes");
+    RCLCPP_DEBUG_STREAM(node->get_logger(), "incomplete rslidar packet read: " << nbytes << " bytes");
   }
   if (flag == 0)
   {
@@ -220,8 +222,8 @@ int InputSocket::getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_o
   }
   // Average the times at which we begin and end reading.  Use that to
   // estimate when the scan occurred. Add the time offset.
-  double time2 = ros::Time::now().toSec();
-  pkt->stamp = ros::Time((time2 + time1) / 2.0 + time_offset);
+  double time2 = node->get_clock()->now().seconds();
+  pkt->stamp = rclcpp::Time((int64_t)(((time2 + time1) / 2.0 + time_offset)*1e9));
 
   return 0;
 }
@@ -237,31 +239,37 @@ int InputSocket::getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_o
    *  @param packet_rate expected device packet frequency (Hz)
    *  @param filename PCAP dump file name
    */
-InputPCAP::InputPCAP(ros::NodeHandle private_nh, uint16_t port, double packet_rate, std::string filename,
+InputPCAP::InputPCAP(std::shared_ptr<rclcpp::Node> node, uint16_t port, double packet_rate, std::string filename,
                      bool read_once, bool read_fast, double repeat_delay)
-  : Input(private_nh, port), packet_rate_(packet_rate), filename_(filename)
+  : Input(node, port), packet_rate_(packet_rate), filename_(filename)
 {
   pcap_ = NULL;
   empty_ = true;
 
   // get parameters using private node handle
-  private_nh.param("read_once", read_once_, false);
-  private_nh.param("read_fast", read_fast_, false);
-  private_nh.param("repeat_delay", repeat_delay_, 0.0);
+  if(!node->has_parameter("read_once"))
+    node->declare_parameter<bool>("read_once", false);
+  node->get_parameter("read_once", read_once_);
+  if(!node->has_parameter("read_fast"))
+    node->declare_parameter<bool>("read_fast", false);
+  node->get_parameter("read_fast", read_fast_);
+  if(!node->has_parameter("repeat_delay"))
+    node->declare_parameter<double>("repeat_delay", 0.0);
+  node->get_parameter("repeat_delay", repeat_delay_);
 
   if (read_once_)
-    ROS_INFO("Read input file only once.");
+    RCLCPP_INFO(node->get_logger(), "Read input file only once.");
   if (read_fast_)
-    ROS_INFO("Read input file as quickly as possible.");
+    RCLCPP_INFO(node->get_logger(), "Read input file as quickly as possible.");
   if (repeat_delay_ > 0.0)
-    ROS_INFO("Delay %.3f seconds before repeating input file.", repeat_delay_);
+    RCLCPP_INFO(node->get_logger(), "Delay %.3f seconds before repeating input file.", repeat_delay_);
 
   // Open the PCAP dump file
   // ROS_INFO("Opening PCAP file \"%s\"", filename_.c_str());
-  ROS_INFO_STREAM("Opening PCAP file " << filename_);
+  RCLCPP_INFO_STREAM(node->get_logger(), "Opening PCAP file " << filename_);
   if ((pcap_ = pcap_open_offline(filename_.c_str(), errbuf_)) == NULL)
   {
-    ROS_FATAL("Error opening rslidar socket dump file.");
+    RCLCPP_FATAL(node->get_logger(), "Error opening rslidar socket dump file.");
     return;
   }
 
@@ -281,7 +289,7 @@ InputPCAP::~InputPCAP(void)
 }
 
 /** @brief Get one rslidar packet. */
-int InputPCAP::getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_offset)
+int InputPCAP::getPacket(rslidar_msgs::msg::RslidarPacket* pkt, const double time_offset)
 {
   struct pcap_pkthdr* header;
   const u_char* pkt_data;
@@ -326,7 +334,7 @@ int InputPCAP::getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_off
         }
       }
 
-      pkt->stamp = ros::Time::now();  // time_offset not considered here, as no
+      pkt->stamp = node->get_clock()->now();  // time_offset not considered here, as no
                                       // synchronization required
       empty_ = false;
       return 0;  // success
@@ -334,23 +342,23 @@ int InputPCAP::getPacket(rslidar_msgs::rslidarPacket* pkt, const double time_off
 
     if (empty_)  // no data in file?
     {
-      ROS_WARN("Error %d reading rslidar packet: %s", res, pcap_geterr(pcap_));
+      RCLCPP_WARN(node->get_logger(), "Error %d reading rslidar packet: %s", res, pcap_geterr(pcap_));
       return -1;
     }
 
     if (read_once_)
     {
-      ROS_INFO("end of file reached -- done reading.");
+      RCLCPP_INFO(node->get_logger(), "end of file reached -- done reading.");
       return -1;
     }
 
     if (repeat_delay_ > 0.0)
     {
-      ROS_INFO("end of file reached -- delaying %.3f seconds.", repeat_delay_);
+      RCLCPP_INFO(node->get_logger(), "end of file reached -- delaying %.3f seconds.", repeat_delay_);
       usleep(rint(repeat_delay_ * 1000000.0));
     }
 
-    ROS_DEBUG("replaying rslidar dump file");
+    RCLCPP_DEBUG(node->get_logger(), "replaying rslidar dump file");
 
     // I can't figure out how to rewind the file, because it
     // starts with some kind of header.  So, close the file

@@ -21,39 +21,28 @@ namespace rslidar_pointcloud
 std::string model;
 
 /** @brief Constructor. */
-Convert::Convert(ros::NodeHandle node, ros::NodeHandle private_nh) : data_(new rslidar_rawdata::RawData())
+Convert::Convert(std::shared_ptr<rclcpp::Node> node) : data_(new rslidar_rawdata::RawData())
 {
-  data_->loadConfigFile(node, private_nh);  // load lidar parameters
-  private_nh.param("model", model, std::string("RS16"));
+  data_->loadConfigFile(node);  // load lidar parameters
 
   // advertise output point cloud (before subscribing to input data)
   std::string output_points_topic;
-  private_nh.param("output_points_topic", output_points_topic, std::string("rslidar_points"));
-  output_ = node.advertise<sensor_msgs::PointCloud2>(output_points_topic, 10);
-
-  srv_ = boost::make_shared<dynamic_reconfigure::Server<rslidar_pointcloud::CloudNodeConfig> >(private_nh);
-  dynamic_reconfigure::Server<rslidar_pointcloud::CloudNodeConfig>::CallbackType f;
-  f = boost::bind(&Convert::callback, this, _1, _2);
-  srv_->setCallback(f);
+  node->declare_parameter<std::string>("output_points_topic", "rslidar_points");
+  node->get_parameter("output_points_topic", output_points_topic);
+  output_ = node->create_publisher<sensor_msgs::msg::PointCloud2>(output_points_topic, 10);
 
   // subscribe to rslidarScan packets
   std::string input_packets_topic;
-  private_nh.param("input_packets_topic", input_packets_topic, std::string("rslidar_packets"));
-  rslidar_scan_ = node.subscribe(input_packets_topic, 10, &Convert::processScan, (Convert*)this,
-                                 ros::TransportHints().tcpNoDelay(true));
-}
-
-void Convert::callback(rslidar_pointcloud::CloudNodeConfig& config, uint32_t level)
-{
-  ROS_INFO("Reconfigure Request");
-  // config_.time_offset = config.time_offset;
+  node->declare_parameter<std::string>("input_packets_topic", "rslidar_packets");
+  node->get_parameter("input_packets_topic", input_packets_topic);
+  rslidar_scan_ = node->create_subscription<rslidar_msgs::msg::RslidarScan>(input_packets_topic, 10, std::bind(&Convert::processScan, this, std::placeholders::_1));
 }
 
 /** @brief Callback for raw scan messages. */
-void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
+void Convert::processScan(const rslidar_msgs::msg::RslidarScan& scanMsg)
 {
   //pcl::PointCloud<pcl::PointXYZI>::Ptr outPoints(new pcl::PointCloud<pcl::PointXYZI>);
-  sensor_msgs::PointCloud2 outMsg;
+  sensor_msgs::msg::PointCloud2 outMsg;
   int height;
   int width;
   int num_of_points;
@@ -62,13 +51,13 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
   if (model == "RS16")
   {
     height = 16;
-    width = 24 * (int)scanMsg->packets.size();
+    width = 24 * (int)scanMsg.packets.size();
     is_dense = false;
   }
   else if (model == "RS32")
   {
     height = 32;
-    width = 12 * (int)scanMsg->packets.size();
+    width = 12 * (int)scanMsg.packets.size();
     is_dense = false;
   }
 
@@ -86,17 +75,18 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
   //outPoints->clear();
   // process each packet provided by the driver
 
-  outMsg.header.stamp = scanMsg->packets[0].stamp;   // The timestamp in the header of the scanMsg belongs to the last packet, not the first one...
-  outMsg.header.frame_id = scanMsg->header.frame_id;
+  outMsg.header.stamp = scanMsg.packets[0].stamp;   // The timestamp in the header of the scanMsg belongs to the last packet, not the first one...
+  outMsg.header.frame_id = scanMsg.header.frame_id;
   outMsg.height = height;
   outMsg.width = width;
   outMsg.is_dense = is_dense;
 
 
   data_->block_num = 0;
-  for (size_t i = 0; i < scanMsg->packets.size(); ++i)
+  for (size_t i = 0; i < scanMsg.packets.size(); ++i)
   {
-    data_->unpack_stamped(scanMsg->packets[i], x_vect, y_vect, z_vect, intensity_vect, ring_vect, time_offset_vect, outMsg.header.stamp);
+    rclcpp::Time timeStamp(outMsg.header.stamp);
+    data_->unpack_stamped(scanMsg.packets[i], x_vect, y_vect, z_vect, intensity_vect, ring_vect, time_offset_vect, timeStamp);
   }
 
   //TODO: Fill the message with data in the vectors:
@@ -104,12 +94,12 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
 
   sensor_msgs::PointCloud2Modifier pcd_modifier(outMsg);
   // this call also resizes the data structure according to the given width, height and fields
-  pcd_modifier.setPointCloud2Fields(6, "x", 1, sensor_msgs::PointField::FLOAT32,
-                                       "y", 1, sensor_msgs::PointField::FLOAT32,
-                                       "z", 1, sensor_msgs::PointField::FLOAT32,
-                                       "intensity", 1, sensor_msgs::PointField::FLOAT32,
-                                       "ring", 1, sensor_msgs::PointField::UINT16,
-                                       "t", 1, sensor_msgs::PointField::UINT32);
+  pcd_modifier.setPointCloud2Fields(6, "x", 1, sensor_msgs::msg::PointField::FLOAT32,
+                                       "y", 1, sensor_msgs::msg::PointField::FLOAT32,
+                                       "z", 1, sensor_msgs::msg::PointField::FLOAT32,
+                                       "intensity", 1, sensor_msgs::msg::PointField::FLOAT32,
+                                       "ring", 1, sensor_msgs::msg::PointField::UINT16,
+                                       "t", 1, sensor_msgs::msg::PointField::UINT32);
 
   sensor_msgs::PointCloud2Iterator<float> iter_x(outMsg, "x");
   sensor_msgs::PointCloud2Iterator<float> iter_y(outMsg, "y");
@@ -132,7 +122,7 @@ void Convert::processScan(const rslidar_msgs::rslidarScan::ConstPtr& scanMsg)
 
   }
 
-  output_.publish(outMsg);
+  output_->publish(outMsg);
 
 }
 }  // namespace rslidar_pointcloud
