@@ -18,7 +18,6 @@
 
 namespace rslidar_pointcloud
 {
-std::string model;
 
 /** @brief Constructor. */
 Convert::Convert(std::shared_ptr<rclcpp::Node> node) : data_(new rslidar_rawdata::RawData())
@@ -48,13 +47,13 @@ void Convert::processScan(const rslidar_msgs::msg::RslidarScan& scanMsg)
   int num_of_points;
   bool is_dense;
 
-  if (model == "RS16")
+  if (data_->model == "RS16")
   {
     height = 16;
     width = 24 * (int)scanMsg.packets.size();
     is_dense = false;
   }
-  else if (model == "RS32")
+  else if (data_->model == "RS32")
   {
     height = 32;
     width = 12 * (int)scanMsg.packets.size();

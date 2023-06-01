@@ -44,7 +44,6 @@ RawData::RawData()
 void RawData::loadConfigFile(std::shared_ptr<rclcpp::Node> node)
 {
   std::string anglePath, curvesPath, channelPath, curvesRatePath;
-  std::string model;
   std::string resolution_param;
 
   node->declare_parameter<std::string>("curves_path", "");
