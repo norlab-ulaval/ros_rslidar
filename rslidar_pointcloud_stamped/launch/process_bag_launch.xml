@@ -1,0 +1,20 @@
+<launch>
+    <arg name="input_bag_path" default=""/>
+    <arg name="output_bag_path" default=""/>
+
+    <node pkg="rslidar_pointcloud_stamped" exec="bag_processor" name="bag_processor" output="screen">
+        <param name="packet_topic_name" value="/rslidar16_packets"/>
+        <param name="difop_packet_topic_name" value="/rslidar16_packets_difop"/>
+        <param name="point_cloud_topic_name" value="rslidar_points" />
+        <param name="model" value="RS16"/>
+        <param name="max_distance" value="200.0"/>
+        <param name="min_distance" value="0.2"/>
+        <param name="resolution_type" value="0.5cm"/>
+        <param name="intensity_mode" value="1"/>
+        <param name="curves_path" value="$(find-pkg-share rslidar_pointcloud_stamped)/data/configuration_files_rig/curves.csv" />
+        <param name="angle_path" value="$(find-pkg-share rslidar_pointcloud_stamped)/data/configuration_files_rig/angle.csv" />
+        <param name="channel_path" value="$(find-pkg-share rslidar_pointcloud_stamped)/data/configuration_files_rig/ChannelNum.csv" />
+        <param name="input_bag_path" value="$(var input_bag_path)"/>
+        <param name="output_bag_path" value="$(var output_bag_path)"/>
+    </node>
+</launch>

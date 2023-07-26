@@ -8,6 +8,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(rslidar_msgs REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(rosbag2_cpp REQUIRED)
 
 add_library(rslidar_data_stamped src/rawdata.cc)
 ament_target_dependencies(rslidar_data_stamped
@@ -36,10 +37,21 @@ target_link_libraries(cloud_node_stamped
   rslidar_point_stamped
 )
 
-install(TARGETS cloud_node_stamped
+add_executable(bag_processor src/bag_processor.cc)
+ament_target_dependencies(bag_processor
+  rclcpp
+  sensor_msgs
+  rslidar_msgs
+  rosbag2_cpp
+)
+
+install(TARGETS cloud_node_stamped bag_processor
   DESTINATION lib/${PROJECT_NAME}
 )
 install(DIRECTORY data
+  DESTINATION share/${PROJECT_NAME}
+)
+install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
 
