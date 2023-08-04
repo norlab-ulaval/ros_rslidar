@@ -5,7 +5,7 @@
     <node pkg="rslidar_pointcloud_stamped" exec="bag_processor" name="bag_processor" output="screen">
         <param name="packet_topic_name" value="/rslidar16_packets"/>
         <param name="difop_packet_topic_name" value="/rslidar16_packets_difop"/>
-        <param name="point_cloud_topic_name" value="rslidar_points" />
+	<param name="point_cloud_topic_name" value="/rslidar_points" />
         <param name="model" value="RS16"/>
         <param name="max_distance" value="200.0"/>
         <param name="min_distance" value="0.2"/>
